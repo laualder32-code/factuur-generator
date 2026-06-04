@@ -244,9 +244,9 @@ def herstel_afbeeldingen(template_path, output_buf):
     nieuwe_buf = io.BytesIO()
 
     # Bestanden vanuit openpyxl (gegevens die we hebben aangepast)
+    # sheet1.xml.rels komt van het TEMPLATE (behoud rId2 → drawing, rId1 → printerSettings)
     uit_output = {
         'xl/worksheets/sheet1.xml',
-        'xl/worksheets/_rels/sheet1.xml.rels',
         'xl/sharedStrings.xml',
         'xl/styles.xml',              # openpyxl's stijlindices moeten overeenkomen met sheet1.xml
         'xl/workbook.xml',            # bevat fullCalcOnLoad="1" zodat formules herberekend worden
@@ -292,13 +292,14 @@ def herstel_afbeeldingen(template_path, output_buf):
                             tekst
                         )
 
-                    # 2. Voeg <drawing r:id="rId1"/> terug toe voor </worksheet>
-                    # xmlns:r expliciet declareren zodat de prefix geldig is op alle openpyxl-versies
-                    if '<drawing' not in tekst:
-                        tekst = tekst.replace(
-                            '</worksheet>',
-                            '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></worksheet>'
-                        )
+                    # 2. Drawing element vervangen/toevoegen met rId2
+                    # (template-rels: rId2 = drawing1.xml, rId1 = printerSettings)
+                    # openpyxl kan al een <drawing r:id="rId1"/> bevatten met zijn eigen rId — verwijder dat
+                    tekst = re.sub(r'<drawing\b.*?/>', '', tekst)
+                    tekst = tekst.replace(
+                        '</worksheet>',
+                        '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId2"/></worksheet>'
+                    )
 
                     data = tekst.encode('utf-8')
 
