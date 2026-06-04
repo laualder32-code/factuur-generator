@@ -357,6 +357,18 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/healthcheck")
+def healthcheck():
+    import os
+    tmpl_ok = os.path.exists(TEMPLATE_PATH)
+    tmpl_size = os.path.getsize(TEMPLATE_PATH) if tmpl_ok else 0
+    return {
+        "template_gevonden": tmpl_ok,
+        "template_grootte_bytes": tmpl_size,
+        "template_pad": TEMPLATE_PATH,
+    }
+
+
 @app.route("/parse", methods=["POST"])
 def parse():
     bestand = request.files.get("bestand")
