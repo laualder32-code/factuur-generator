@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+*.xlsx
+!Factuur format.xlsx
+start.bat
+.env
