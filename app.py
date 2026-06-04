@@ -293,10 +293,11 @@ def herstel_afbeeldingen(template_path, output_buf):
                         )
 
                     # 2. Voeg <drawing r:id="rId1"/> terug toe voor </worksheet>
+                    # xmlns:r expliciet declareren zodat de prefix geldig is op alle openpyxl-versies
                     if '<drawing' not in tekst:
                         tekst = tekst.replace(
                             '</worksheet>',
-                            '<drawing r:id="rId1"/></worksheet>'
+                            '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></worksheet>'
                         )
 
                     data = tekst.encode('utf-8')
