@@ -536,9 +536,7 @@
         ${d.eigen_auto === false
           ? `<span style="color:#c0392b;font-size:0.78rem;font-weight:600;">geen km-vergoeding</span>`
           : d.km > 0 ? `<span style="color:#1F4E79;font-size:0.78rem;">${d.km} km</span>` : ""}
-        ${alleUrenData.length > 1
-          ? `<button onclick="verwijderBestand(${i})" title="Verwijder">✕</button>`
-          : ""}
+        <button onclick="verwijderBestand(${i})" title="Verwijder">✕</button>
       </li>`).join("");
   }
 
