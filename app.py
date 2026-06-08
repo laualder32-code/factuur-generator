@@ -409,7 +409,7 @@ def genereer():
 
         naam = uren_data_lijst[0].get("naam", "")
         fnr  = form.get("factuurnummer", datetime.now().strftime("%Y%m%d"))
-        bestandsnaam = f"{naam} Factuur {fnr}.xlsx".strip()
+        bestandsnaam = f"{fnr} - Factuur {naam}.xlsx".strip()
 
         return send_file(
             buf,

@@ -580,8 +580,8 @@
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      const naam = alleUrenData[0].naam ? `${alleUrenData[0].naam} ` : "";
-      a.download = `${naam}Factuur ${payload.factuurnummer}.xlsx`;
+      const naam = alleUrenData[0].naam ? ` ${alleUrenData[0].naam}` : "";
+      a.download = `${payload.factuurnummer} - Factuur${naam}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       document.getElementById("melding-succes").classList.remove("verborgen");
