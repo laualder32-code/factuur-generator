@@ -47,6 +47,7 @@ def lees_urenregistratie(bestand_bytes):
 
     werk_uren = reis_uren = wacht_uren = totaal_km = 0.0
     datums = []
+    activiteiten = []
     bekende_types = {"Worktime", "TravelTime", "WaitWorkTime", "WorkTimeMinus Lunch"}
 
     for rij in range(6, 200):
@@ -59,14 +60,19 @@ def lees_urenregistratie(bestand_bytes):
             break
 
         datum_val = ws.cell(row=rij, column=2).value
+        datum_obj = None
         if datum_val:
             if isinstance(datum_val, datetime):
                 datums.append(datum_val)
+                datum_obj = datum_val
             elif isinstance(datum_val, date):
-                datums.append(datetime(datum_val.year, datum_val.month, datum_val.day))
+                dt = datetime(datum_val.year, datum_val.month, datum_val.day)
+                datums.append(dt)
+                datum_obj = dt
 
         van = ws.cell(row=rij, column=6).value
         tot = ws.cell(row=rij, column=7).value
+        omschrijving_cel = str(ws.cell(row=rij, column=4).value or "")
         uren = 0.0
         if van is not None and tot is not None:
             if isinstance(van, time) and isinstance(tot, time):
@@ -74,18 +80,26 @@ def lees_urenregistratie(bestand_bytes):
             elif isinstance(van, (int, float)) and isinstance(tot, (int, float)):
                 uren = (tot - van) * 24
 
+        datum_str = datum_obj.strftime("%Y-%m-%d") if datum_obj else None
         tl = type_val.lower()
         if tl == "worktimeminus lunch":
             werk_uren -= uren
+            for act in reversed(activiteiten):
+                if act["type"] == "werk":
+                    act["uren"] -= uren
+                    break
         elif tl.startswith("worktime"):
             werk_uren += uren
+            activiteiten.append({"type": "werk", "omschrijving": omschrijving_cel, "uren": uren, "datum": datum_str})
         elif tl == "traveltime":
             reis_uren += uren
             km = ws.cell(row=rij, column=9).value
-            if km and isinstance(km, (int, float)):
-                totaal_km += float(km)
+            km_val = float(km) if km and isinstance(km, (int, float)) else 0.0
+            totaal_km += km_val
+            activiteiten.append({"type": "reis", "omschrijving": omschrijving_cel, "uren": uren, "datum": datum_str, "km": km_val})
         elif tl == "waitworktime":
             wacht_uren += uren
+            activiteiten.append({"type": "wacht", "omschrijving": omschrijving_cel, "uren": uren, "datum": datum_str})
 
     lunch        = float(ws.cell(row=18, column=22).value or 0)
     bonnetjes    = float(ws.cell(row=19, column=22).value or 0)
@@ -118,6 +132,7 @@ def lees_urenregistratie(bestand_bytes):
         "lunch":         lunch,
         "bonnetjes":     bonnetjes,
         "overnachting":  overnachting,
+        "activiteiten":  activiteiten,
     }
 
 
@@ -179,17 +194,50 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         loc = d["locatie"]
         km_d = d["km"] if (d.get("eigen_auto", True) and eigen_auto) else 0
 
-        for omschrijving, aantal, tarief, check in [
-            (f"Gewerkte uren - {dlabel} - {loc}",      d["werk_uren"],  45.0, d["werk_uren"]),
-            (f"Vergoeding reisuren - {dlabel} - {loc}", d["reis_uren"],  22.5, d["reis_uren"]),
-            (f"Vergoeding KM's - {dlabel} - {loc}",     km_d,            0.35, km_d),
-            (f"WachtWerkTijd uren - {dlabel} - {loc}",  d["wacht_uren"], 22.5, d["wacht_uren"]),
-        ]:
-            if check and vrije_rij <= 35:
-                ws.cell(row=vrije_rij, column=1, value=omschrijving)
-                ws.cell(row=vrije_rij, column=7, value=aantal)
-                ws.cell(row=vrije_rij, column=8, value=tarief)
+        activiteiten = d.get("activiteiten") or []
+        if activiteiten:
+            for act in activiteiten:
+                if not act["uren"]:
+                    continue
+                if act.get("datum"):
+                    act_dt = datetime.strptime(act["datum"], "%Y-%m-%d")
+                    act_datum = datum_nl(act_dt)
+                else:
+                    act_datum = dlabel
+                omschr = act.get("omschrijving") or loc
+                if act["type"] == "werk":
+                    label = f"Gewerkte uren - {act_datum} - {omschr}"
+                    tarief = 45.0
+                elif act["type"] == "reis":
+                    label = f"Vergoeding reisuren - {act_datum} - {omschr}"
+                    tarief = 22.5
+                elif act["type"] == "wacht":
+                    label = f"WachtWerkTijd uren - {act_datum} - {omschr}"
+                    tarief = 22.5
+                else:
+                    continue
+                if vrije_rij <= 35:
+                    ws.cell(row=vrije_rij, column=1, value=label)
+                    ws.cell(row=vrije_rij, column=7, value=act["uren"])
+                    ws.cell(row=vrije_rij, column=8, value=tarief)
+                    vrije_rij += 1
+            if km_d and vrije_rij <= 35:
+                ws.cell(row=vrije_rij, column=1, value=f"Vergoeding KM's - {dlabel} - {loc}")
+                ws.cell(row=vrije_rij, column=7, value=km_d)
+                ws.cell(row=vrije_rij, column=8, value=0.35)
                 vrije_rij += 1
+        else:
+            for omschrijving, aantal, tarief, check in [
+                (f"Gewerkte uren - {dlabel} - {loc}",      d["werk_uren"],  45.0, d["werk_uren"]),
+                (f"Vergoeding reisuren - {dlabel} - {loc}", d["reis_uren"],  22.5, d["reis_uren"]),
+                (f"Vergoeding KM's - {dlabel} - {loc}",     km_d,            0.35, km_d),
+                (f"WachtWerkTijd uren - {dlabel} - {loc}",  d["wacht_uren"], 22.5, d["wacht_uren"]),
+            ]:
+                if check and vrije_rij <= 35:
+                    ws.cell(row=vrije_rij, column=1, value=omschrijving)
+                    ws.cell(row=vrije_rij, column=7, value=aantal)
+                    ws.cell(row=vrije_rij, column=8, value=tarief)
+                    vrije_rij += 1
 
     # Lunch en Overnachting: gegroepeerd (één regel, aantal = aantal bestanden)
     for label, sleutel in [
