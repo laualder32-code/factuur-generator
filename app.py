@@ -218,7 +218,8 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
                     continue
                 if vrije_rij <= 35:
                     ws.cell(row=vrije_rij, column=1, value=label)
-                    ws.cell(row=vrije_rij, column=7, value=act["uren"])
+                    cel = ws.cell(row=vrije_rij, column=7, value=act["uren"])
+                    cel.number_format = '0.00'
                     ws.cell(row=vrije_rij, column=8, value=tarief)
                     vrije_rij += 1
             if km_d and vrije_rij <= 35:
