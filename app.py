@@ -48,7 +48,7 @@ def lees_urenregistratie(bestand_bytes):
     werk_uren = reis_uren = wacht_uren = totaal_km = 0.0
     datums = []
     activiteiten = []
-    bekende_types = {"Worktime", "TravelTime", "WaitWorkTime", "WorkTimeMinus Lunch"}
+    bekende_types = {"worktime", "traveltime", "waitworktime", "worktimeminus lunch"}
 
     for rij in range(6, 200):
         type_val = ws.cell(row=rij, column=3).value
@@ -56,7 +56,7 @@ def lees_urenregistratie(bestand_bytes):
             if rij > 25:
                 break
             continue
-        if type_val not in bekende_types:
+        if type_val.lower() not in bekende_types:
             break
 
         datum_val = ws.cell(row=rij, column=2).value
