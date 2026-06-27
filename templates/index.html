@@ -163,6 +163,27 @@
     .info-item { font-size: 0.88rem; color: #444; }
     .info-item strong { color: #1F4E79; }
 
+    .totaal-bedrag-box {
+      background: #1F4E79;
+      color: white;
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .totaal-bedrag-box .totaal-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      opacity: 0.85;
+    }
+    .totaal-bedrag-box .totaal-waarde {
+      font-size: 1.5rem;
+      font-weight: 800;
+    }
+
     /* Checkbox rij */
     .check-row {
       display: flex;
@@ -323,6 +344,10 @@
       </div>
     </div>
     <div id="extra-kosten-info" class="info-rij" style="margin-top:12px;"></div>
+    <div class="totaal-bedrag-box" style="margin-top:16px;">
+      <div class="totaal-label">Verwacht totaalbedrag</div>
+      <div class="totaal-waarde" id="stat-totaal">€ 0,00</div>
+    </div>
   </div>
 
   <!-- Stap 3: Factuuradres -->
@@ -524,6 +549,11 @@
     if (t.bonnetjes > 0)    extra.push(`<div class="info-item"><strong>Bonnetjes:</strong> €${t.bonnetjes.toFixed(2)}</div>`);
     if (t.overnachting > 0) extra.push(`<div class="info-item"><strong>Overnachting:</strong> €${t.overnachting.toFixed(2)}</div>`);
     document.getElementById("extra-kosten-info").innerHTML = extra.join("");
+
+    const totaalBedrag = t.werk_uren * 45 + t.reis_uren * 22.5 + t.wacht_uren * 22.5
+                        + t.km * 0.35 + t.lunch + t.bonnetjes + t.overnachting;
+    document.getElementById("stat-totaal").textContent =
+      "€ " + totaalBedrag.toFixed(2).replace(".", ",");
   }
 
   function updateBestendenLijst() {
