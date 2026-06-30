@@ -444,7 +444,7 @@
   function updateVervaldatum() {
     const fd = document.getElementById("factuurdatum").value;
     if (!fd) return;
-    const d = new Date(fd); d.setDate(d.getDate() + 30);
+    const d = new Date(fd); d.setMonth(d.getMonth() + 1);
     document.getElementById("vervaldatum").value = d.toISOString().slice(0, 10);
   }
 
@@ -536,7 +536,7 @@
 
     const vandaag = nu.toISOString().slice(0, 10);
     document.getElementById("factuurdatum").value = vandaag;
-    const verval = new Date(nu); verval.setDate(verval.getDate() + 30);
+    const verval = new Date(nu); verval.setMonth(verval.getMonth() + 1);
     document.getElementById("vervaldatum").value = verval.toISOString().slice(0, 10);
 
     ["kaart-samenvatting","kaart-adres","kaart-instellingen","btn-download"].forEach(id =>

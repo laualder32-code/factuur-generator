@@ -5,6 +5,7 @@ import openpyxl
 from openpyxl.styles import Alignment
 import os
 from datetime import datetime, timedelta, date, time
+from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
 
@@ -171,9 +172,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     except (ValueError, TypeError):
         factuur_dt = datetime.now()
     try:
-        verval_dt = datetime.strptime(vervaldatum, "%Y-%m-%d") if vervaldatum else factuur_dt + timedelta(days=30)
+        verval_dt = datetime.strptime(vervaldatum, "%Y-%m-%d") if vervaldatum else factuur_dt + relativedelta(months=1)
     except (ValueError, TypeError):
-        verval_dt = factuur_dt + timedelta(days=30)
+        verval_dt = factuur_dt + relativedelta(months=1)
 
     ws.cell(row=15, column=3,  value=factuurnummer)
     ws.cell(row=15, column=12, value=factuurnummer)
