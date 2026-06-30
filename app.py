@@ -137,7 +137,8 @@ def lees_urenregistratie(bestand_bytes):
 
 
 def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
-                 client_email, client_kvk, factuurnummer, btw_pct, eigen_auto, btw_verrekenen=True):
+                 client_email, client_kvk, factuurnummer, btw_pct, eigen_auto, btw_verrekenen=True,
+                 factuurdatum=None, vervaldatum=None):
 
     # Aggregeer alle urenregistraties
     totalen = {
@@ -165,13 +166,21 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=12, column=1, value=client_kvk)
 
     # Factuurnummer en datums
-    vandaag = datetime.now()
+    try:
+        factuur_dt = datetime.strptime(factuurdatum, "%Y-%m-%d") if factuurdatum else datetime.now()
+    except (ValueError, TypeError):
+        factuur_dt = datetime.now()
+    try:
+        verval_dt = datetime.strptime(vervaldatum, "%Y-%m-%d") if vervaldatum else factuur_dt + timedelta(days=30)
+    except (ValueError, TypeError):
+        verval_dt = factuur_dt + timedelta(days=30)
+
     ws.cell(row=15, column=3,  value=factuurnummer)
     ws.cell(row=15, column=12, value=factuurnummer)
-    ws.cell(row=16, column=3,  value=vandaag)
-    ws.cell(row=16, column=12, value=vandaag)
-    ws.cell(row=17, column=3,  value=vandaag + timedelta(days=30))
-    ws.cell(row=17, column=12, value=vandaag + timedelta(days=30))
+    ws.cell(row=16, column=3,  value=factuur_dt)
+    ws.cell(row=16, column=12, value=factuur_dt)
+    ws.cell(row=17, column=3,  value=verval_dt)
+    ws.cell(row=17, column=12, value=verval_dt)
 
     # Periode — één regel per urenregistratie
     periodes = "\n".join(periode_str(d) for d in uren_data_lijst)
@@ -451,6 +460,8 @@ def genereer():
             btw_pct         = float(form.get("btw_pct", 21)),
             eigen_auto      = bool(form.get("eigen_auto", True)),
             btw_verrekenen  = bool(form.get("btw_verrekenen", True)),
+            factuurdatum    = form.get("factuurdatum"),
+            vervaldatum     = form.get("vervaldatum"),
         )
         buf = io.BytesIO()
         wb.save(buf)

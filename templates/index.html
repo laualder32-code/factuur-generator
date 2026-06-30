@@ -378,7 +378,7 @@
   <!-- Stap 4: Factuurinstellingen -->
   <div class="card verborgen" id="kaart-instellingen">
     <h2><div class="badge">4</div> Factuurinstellingen</h2>
-    <div class="grid-2">
+    <div class="grid-2" style="margin-bottom:14px;">
       <div>
         <label>Factuurnummer</label>
         <input type="text" id="factuurnummer" />
@@ -395,6 +395,16 @@
             <option value="9">9%</option>
           </select>
         </div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <label>Factuurdatum</label>
+        <input type="date" id="factuurdatum" onchange="updateVervaldatum()" />
+      </div>
+      <div>
+        <label>Vervaldatum <span style="font-weight:400;color:#888;">(automatisch +30 dagen)</span></label>
+        <input type="date" id="vervaldatum" />
       </div>
     </div>
   </div>
@@ -429,6 +439,13 @@
   function datumNL(isoStr) {
     const d = new Date(isoStr + "T00:00:00");
     return `${d.getDate()} ${MAANDEN[d.getMonth()]} ${d.getFullYear()}`;
+  }
+
+  function updateVervaldatum() {
+    const fd = document.getElementById("factuurdatum").value;
+    if (!fd) return;
+    const d = new Date(fd); d.setDate(d.getDate() + 30);
+    document.getElementById("vervaldatum").value = d.toISOString().slice(0, 10);
   }
 
   function toggleBtw() {
@@ -517,6 +534,11 @@
     document.getElementById("factuurnummer").value =
       `${nu.getFullYear()}${String(nu.getMonth()+1).padStart(2,"0")}${String(nu.getDate()).padStart(2,"0")}`;
 
+    const vandaag = nu.toISOString().slice(0, 10);
+    document.getElementById("factuurdatum").value = vandaag;
+    const verval = new Date(nu); verval.setDate(verval.getDate() + 30);
+    document.getElementById("vervaldatum").value = verval.toISOString().slice(0, 10);
+
     ["kaart-samenvatting","kaart-adres","kaart-instellingen","btn-download"].forEach(id =>
       document.getElementById(id).classList.remove("verborgen"));
     document.getElementById("bestanden-lijst").style.display = "block";
@@ -596,6 +618,8 @@
       btw_pct:         document.getElementById("btw-check").checked
                          ? parseFloat(document.getElementById("btw-pct").value) : 0,
       eigen_auto:      true,
+      factuurdatum:    document.getElementById("factuurdatum").value,
+      vervaldatum:     document.getElementById("vervaldatum").value,
     };
 
     try {
