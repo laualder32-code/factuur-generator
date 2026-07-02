@@ -287,8 +287,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         vrije_rij += 1
 
     # BTW percentage en BTW-nummer
+    # Q5 altijd leegmaken: template-formule geeft anders 0
+    ws.cell(row=5, column=17, value="")
     if not btw_verrekenen:
-        ws.cell(row=5, column=8, value="")   # H5: BTW-nr links (Q5=formule volgt automatisch)
+        ws.cell(row=5, column=8, value="")
         ws.cell(row=37, column=9, value=0)
     else:
         ws.cell(row=37, column=9, value=btw_pct / 100)
