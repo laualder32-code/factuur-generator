@@ -179,9 +179,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=15, column=3,  value=factuurnummer)
     ws.cell(row=15, column=12, value=factuurnummer)
     ws.cell(row=16, column=3,  value=factuur_dt)
-    ws.cell(row=16, column=12, value=factuur_dt)
+    ws.cell(row=16, column=12, value="=C16")
     ws.cell(row=17, column=3,  value=verval_dt)
-    ws.cell(row=17, column=12, value=verval_dt)
+    ws.cell(row=17, column=12, value="=C17")
 
     # Kolommen C en L breed genoeg voor lange datums ("10 augustus 2026")
     ws.column_dimensions["C"].width = 18
