@@ -188,7 +188,8 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.column_dimensions["L"].width = 18
     # Kolommen G en I smaller zodat het factuur op twee pagina's past bij afdrukken
     ws.column_dimensions["G"].width = 7
-    ws.column_dimensions["I"].width = 10
+    ws.column_dimensions["I"].width = 11
+    ws.column_dimensions["R"].width = 11
 
     # Periode — één regel per urenregistratie
     periodes = "\n".join(periode_str(d) for d in uren_data_lijst)
