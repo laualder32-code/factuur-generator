@@ -183,6 +183,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=17, column=3,  value=verval_dt)
     ws.cell(row=17, column=12, value=verval_dt)
 
+    # Kolommen C en L breed genoeg voor lange datums ("10 augustus 2026")
+    ws.column_dimensions["C"].width = 18
+    ws.column_dimensions["L"].width = 18
+
     # Periode — één regel per urenregistratie
     periodes = "\n".join(periode_str(d) for d in uren_data_lijst)
     cel = ws.cell(row=13, column=8, value=periodes)
