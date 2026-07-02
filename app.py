@@ -186,6 +186,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     # Kolommen C en L breed genoeg voor lange datums ("10 augustus 2026")
     ws.column_dimensions["C"].width = 18
     ws.column_dimensions["L"].width = 18
+    # Kolommen G en I smaller zodat het factuur op twee pagina's past bij afdrukken
+    ws.column_dimensions["G"].width = 7
+    ws.column_dimensions["I"].width = 10
 
     # Periode — één regel per urenregistratie
     periodes = "\n".join(periode_str(d) for d in uren_data_lijst)
