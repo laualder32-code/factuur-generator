@@ -102,9 +102,9 @@ def lees_urenregistratie(bestand_bytes):
             wacht_uren += uren
             activiteiten.append({"type": "wacht", "omschrijving": omschrijving_cel, "uren": uren, "datum": datum_str})
 
-    lunch        = float(ws.cell(row=18, column=22).value or 0)
-    bonnetjes    = float(ws.cell(row=19, column=22).value or 0)
-    overnachting = float(ws.cell(row=20, column=22).value or 0)
+    lunch        = float(ws.cell(row=17, column=22).value or 0)
+    bonnetjes    = float(ws.cell(row=18, column=22).value or 0)
+    overnachting = float(ws.cell(row=19, column=22).value or 0)
 
     # Detecteer of dit bestand met eigen auto gereden is (geen "Auto van:" notitie)
     eigen_auto = True
