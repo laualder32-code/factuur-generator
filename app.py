@@ -102,9 +102,15 @@ def lees_urenregistratie(bestand_bytes):
             wacht_uren += uren
             activiteiten.append({"type": "wacht", "omschrijving": omschrijving_cel, "uren": uren, "datum": datum_str})
 
-    lunch        = float(ws.cell(row=17, column=22).value or 0)
-    bonnetjes    = float(ws.cell(row=18, column=22).value or 0)
-    overnachting = float(ws.cell(row=19, column=22).value or 0)
+    # Lees extra kosten op basis van het label in kolom T (20), niet op vaste rij
+    # zodat oude én nieuwe uren-registratiebestanden allebei werken
+    lunch = bonnetjes = overnachting = 0.0
+    for _r in range(16, 23):
+        _label = str(ws.cell(row=_r, column=20).value or "").lower()
+        _val   = float(ws.cell(row=_r, column=22).value or 0)
+        if "lunch"        in _label: lunch        = _val
+        elif "bonnetjes"  in _label: bonnetjes    = _val
+        elif "overnachting" in _label: overnachting = _val
 
     # Detecteer of dit bestand met eigen auto gereden is (geen "Auto van:" notitie)
     eigen_auto = True
