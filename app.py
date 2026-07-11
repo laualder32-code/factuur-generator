@@ -324,6 +324,15 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     btw_euro_rij  = subtotaal_rij + 2
     totaal_rij    = subtotaal_rij + 3
 
+    # Kolommen G en H samenvoegen en centreren voor de totaalrijen
+    for rij_nr in [subtotaal_rij, btw_pct_rij, btw_euro_rij, totaal_rij]:
+        # Verwijder eventuele bestaande G/H merge op deze rij
+        for mr in list(ws.merged_cells.ranges):
+            if mr.min_row == rij_nr and mr.max_row == rij_nr and mr.min_col <= 8 and mr.max_col >= 7:
+                ws.merged_cells.remove(mr)
+        ws.merge_cells(start_row=rij_nr, start_column=7, end_row=rij_nr, end_column=8)
+        ws.cell(row=rij_nr, column=7).alignment = Alignment(horizontal='center', vertical='center')
+
     # ── Pass 2: schrijf rijen naar het werkblad ──
     vrije_rij = EERSTE_REG
     for rij in rijen:
