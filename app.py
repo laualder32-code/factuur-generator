@@ -3,6 +3,7 @@ import io
 import zipfile
 import openpyxl
 from openpyxl.styles import Alignment
+from copy import copy
 import os
 from datetime import datetime, timedelta, date, time
 from dateutil.relativedelta import relativedelta
@@ -206,8 +207,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     EERSTE_REG     = 21   # eerste activiteitrij in de template
     TEMPLATE_RIJEN = 15   # template heeft rijen 21–35
     SUBTOTAAL_RIJ  = 36   # subtotaal staat in de originele template op rij 36
+    AFBEELDING_RIJ = 47   # blauwe balk (image-in-cell) in de originele template
 
-    # Bewaar rijhoogte en merged-cell-patronen van een template-activiteitrij
+    # Bewaar rijhoogte, merged-cell-patronen en celopmaak van een template-activiteitrij
     _rh = ws.row_dimensions[EERSTE_REG].height
     template_rij_hoogte = _rh if _rh else (ws.sheet_format.defaultRowHeight or 15)
     template_merges = [
@@ -215,6 +217,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         for mr in list(ws.merged_cells.ranges)
         if mr.min_row == EERSTE_REG and mr.max_row == EERSTE_REG
     ]
+    template_stijlen = {}
+    for col in range(1, 19):
+        src = ws.cell(row=EERSTE_REG, column=col)
+        if src.has_style:
+            template_stijlen[col] = {
+                "border":    copy(src.border),
+                "fill":      copy(src.fill),
+                "font":      copy(src.font),
+                "alignment": copy(src.alignment),
+            }
 
     # Wis alle regelrijen (A, G, H) zodat lege regels volledig leeg zijn
     for r in range(EERSTE_REG, EERSTE_REG + TEMPLATE_RIJEN):
@@ -222,39 +234,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         ws.cell(row=r, column=7, value=None)
         ws.cell(row=r, column=8, value=None)
 
-    # Tel hoeveel activiteitrijen er nodig zijn zodat we op tijd rijen kunnen invoegen
-    def _tel_rijen():
-        n = 0
-        for d in uren_data_lijst:
-            acts = d.get("activiteiten") or []
-            km_d = d["km"] if (d.get("eigen_auto", True) and eigen_auto) else 0
-            if acts:
-                n += sum(1 for a in acts if a.get("uren"))
-                if km_d: n += 1
-            else:
-                for v in [d["werk_uren"], d["reis_uren"], km_d, d["wacht_uren"]]:
-                    if v: n += 1
-        for sleutel in ["lunch", "overnachting"]:
-            if any(d[sleutel] > 0 for d in uren_data_lijst): n += 1
-        n += sum(1 for d in uren_data_lijst if d["bonnetjes"] > 0)
-        return n
+    # ── Pass 1: bouw de exacte lijst van alle te schrijven activiteitrijen ──
+    rijen = []
 
-    n_rijen_nodig = _tel_rijen()
-    extra_rijen   = max(0, n_rijen_nodig - TEMPLATE_RIJEN)
-    if extra_rijen > 0:
-        ws.insert_rows(SUBTOTAAL_RIJ, amount=extra_rijen)
-        # Kopieer rijhoogte en merged cells van template-rijen naar de ingevoegde rijen
-        for r in range(EERSTE_REG + TEMPLATE_RIJEN, EERSTE_REG + TEMPLATE_RIJEN + extra_rijen):
-            ws.row_dimensions[r].height = template_rij_hoogte
-            for min_col, max_col in template_merges:
-                ws.merge_cells(start_row=r, start_column=min_col,
-                                end_row=r, end_column=max_col)
-
-    subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
-    btw_pct_rij   = subtotaal_rij + 1
-
-    # Hoofdregels per urenregistratie — elke activiteit op een aparte regel
-    vrije_rij = EERSTE_REG
     for d in uren_data_lijst:
         e = datetime.strptime(d["eerste_datum"], "%Y-%m-%d")
         l = datetime.strptime(d["laatste_datum"], "%Y-%m-%d")
@@ -274,40 +256,28 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
                     act_datum = dlabel
                 omschr = act.get("omschrijving") or loc
                 if act["type"] == "werk":
-                    label = f"Gewerkte uren - {act_datum} - {omschr}"
-                    tarief = 45.0
+                    rijen.append({"omschrijving": f"Gewerkte uren - {act_datum} - {omschr}",
+                                  "aantal": act["uren"], "tarief": 45.0, "is_uren": True})
                 elif act["type"] == "reis":
-                    label = f"Vergoeding reisuren - {act_datum} - {omschr}"
-                    tarief = 22.5
+                    rijen.append({"omschrijving": f"Vergoeding reisuren - {act_datum} - {omschr}",
+                                  "aantal": act["uren"], "tarief": 22.5, "is_uren": True})
                 elif act["type"] == "wacht":
-                    label = f"WachtWerkTijd uren - {act_datum} - {omschr}"
-                    tarief = 22.5
-                else:
-                    continue
-                ws.cell(row=vrije_rij, column=1, value=label)
-                cel = ws.cell(row=vrije_rij, column=7, value=act["uren"])
-                cel.number_format = '0.00'
-                ws.cell(row=vrije_rij, column=8, value=tarief)
-                vrije_rij += 1
+                    rijen.append({"omschrijving": f"WachtWerkTijd uren - {act_datum} - {omschr}",
+                                  "aantal": act["uren"], "tarief": 22.5, "is_uren": True})
             if km_d:
-                ws.cell(row=vrije_rij, column=1, value=f"Vergoeding KM's - {dlabel} - {loc}")
-                ws.cell(row=vrije_rij, column=7, value=km_d)
-                ws.cell(row=vrije_rij, column=8, value=0.35)
-                vrije_rij += 1
+                rijen.append({"omschrijving": f"Vergoeding KM's - {dlabel} - {loc}",
+                              "aantal": km_d, "tarief": 0.35, "is_uren": False})
         else:
             for omschrijving, aantal, tarief, check in [
-                (f"Gewerkte uren - {dlabel} - {loc}",      d["werk_uren"],  45.0, d["werk_uren"]),
-                (f"Vergoeding reisuren - {dlabel} - {loc}", d["reis_uren"],  22.5, d["reis_uren"]),
-                (f"Vergoeding KM's - {dlabel} - {loc}",     km_d,            0.35, km_d),
-                (f"WachtWerkTijd uren - {dlabel} - {loc}",  d["wacht_uren"], 22.5, d["wacht_uren"]),
+                (f"Gewerkte uren - {dlabel} - {loc}",       d["werk_uren"],  45.0, d["werk_uren"]),
+                (f"Vergoeding reisuren - {dlabel} - {loc}",  d["reis_uren"],  22.5, d["reis_uren"]),
+                (f"Vergoeding KM's - {dlabel} - {loc}",      km_d,            0.35, km_d),
+                (f"WachtWerkTijd uren - {dlabel} - {loc}",   d["wacht_uren"], 22.5, d["wacht_uren"]),
             ]:
                 if check:
-                    ws.cell(row=vrije_rij, column=1, value=omschrijving)
-                    ws.cell(row=vrije_rij, column=7, value=aantal)
-                    ws.cell(row=vrije_rij, column=8, value=tarief)
-                    vrije_rij += 1
+                    rijen.append({"omschrijving": omschrijving, "aantal": aantal,
+                                  "tarief": tarief, "is_uren": False})
 
-    # Lunch en Overnachting: gegroepeerd (één regel, aantal = aantal bestanden)
     for label, sleutel in [
         ("(Vergoeding) Lunch",        "lunch"),
         ("(Vergoeding) Overnachting", "overnachting"),
@@ -316,27 +286,47 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         if not bedragen:
             continue
         alle_gelijk = len(set(bedragen)) == 1
-        if alle_gelijk:
-            aantal = len(bedragen)
-            tarief = bedragen[0]
-        else:
-            aantal = 1
-            tarief = sum(bedragen)
-        ws.cell(row=vrije_rij, column=1, value=label)
-        ws.cell(row=vrije_rij, column=7, value=aantal)
-        ws.cell(row=vrije_rij, column=8, value=tarief)
-        vrije_rij += 1
+        rijen.append({"omschrijving": label,
+                      "aantal": len(bedragen) if alle_gelijk else 1,
+                      "tarief": bedragen[0] if alle_gelijk else sum(bedragen),
+                      "is_uren": False})
 
-    # Bonnetjes: per urenregistratie een aparte regel (bedragen kunnen per dag verschillen)
     for d in uren_data_lijst:
         if d["bonnetjes"] <= 0:
             continue
         e = datetime.strptime(d["eerste_datum"], "%Y-%m-%d")
         l = datetime.strptime(d["laatste_datum"], "%Y-%m-%d")
         datum_label = datum_nl(e) if e == l else f"{datum_nl(e)} t/m {datum_nl(l)}"
-        ws.cell(row=vrije_rij, column=1, value=f"(Vergoeding) Bonnetjes - {datum_label}")
-        ws.cell(row=vrije_rij, column=7, value=1)
-        ws.cell(row=vrije_rij, column=8, value=d["bonnetjes"])
+        rijen.append({"omschrijving": f"(Vergoeding) Bonnetjes - {datum_label}",
+                      "aantal": 1, "tarief": d["bonnetjes"], "is_uren": False})
+
+    # ── Voeg precies het juiste aantal extra rijen in (op basis van werkelijke telling) ──
+    extra_rijen = max(0, len(rijen) - TEMPLATE_RIJEN)
+    if extra_rijen > 0:
+        ws.insert_rows(SUBTOTAAL_RIJ, amount=extra_rijen)
+        for r in range(EERSTE_REG + TEMPLATE_RIJEN, EERSTE_REG + TEMPLATE_RIJEN + extra_rijen):
+            ws.row_dimensions[r].height = template_rij_hoogte
+            for min_col, max_col in template_merges:
+                ws.merge_cells(start_row=r, start_column=min_col,
+                                end_row=r, end_column=max_col)
+            for col, stijl in template_stijlen.items():
+                tgt = ws.cell(row=r, column=col)
+                tgt.border    = copy(stijl["border"])
+                tgt.fill      = copy(stijl["fill"])
+                tgt.font      = copy(stijl["font"])
+                tgt.alignment = copy(stijl["alignment"])
+
+    subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
+    btw_pct_rij   = subtotaal_rij + 1
+
+    # ── Pass 2: schrijf rijen naar het werkblad ──
+    vrije_rij = EERSTE_REG
+    for rij in rijen:
+        ws.cell(row=vrije_rij, column=1, value=rij["omschrijving"])
+        cel = ws.cell(row=vrije_rij, column=7, value=rij["aantal"])
+        if rij["is_uren"]:
+            cel.number_format = '0.00'
+        ws.cell(row=vrije_rij, column=8, value=rij["tarief"])
         vrije_rij += 1
 
     # Ingevoegde rijen missen de =G*H bedragformule uit de template — schrijf die expliciet
@@ -347,10 +337,6 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=subtotaal_rij, column=9,
             value=f"=SUM(I{EERSTE_REG}:I{vrije_rij - 1})")
 
-    # Uitlijning voor omschrijving — template-rijen hebben dit al; stel in voor extra rijen
-    for r in range(EERSTE_REG + TEMPLATE_RIJEN, vrije_rij):
-        ws.cell(row=r, column=1).alignment = Alignment(wrap_text=True, vertical="top")
-
     # BTW percentage en BTW-nummer
     # Q5 altijd leegmaken: template-formule geeft anders 0
     ws.cell(row=5, column=17, value="")
@@ -360,10 +346,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     else:
         ws.cell(row=btw_pct_rij, column=9, value=btw_pct / 100)
 
-    return wb
+    return wb, extra_rijen
 
 
-def herstel_afbeeldingen(template_path, output_buf):
+def herstel_afbeeldingen(template_path, output_buf, extra_rijen=0):
     """
     openpyxl strips <drawing>, printerSettings en vm="1" (image-in-cell).
     Deze functie patcht de openpyxl-output zodat alle afbeeldingen behouden blijven.
@@ -413,8 +399,10 @@ def herstel_afbeeldingen(template_path, output_buf):
                 if naam == 'xl/worksheets/sheet1.xml':
                     tekst = data.decode('utf-8')
 
-                    # 1. Voeg vm="1" terug toe aan A47 en J47 (image-in-cell richData)
-                    for cel in ['A47', 'J47']:
+                    # 1. Voeg vm="1" terug toe aan de afbeelding-in-cel rijen
+                    # (verschuift mee met het aantal ingevoegde activiteitrijen)
+                    _afb_rij = 47 + extra_rijen
+                    for cel in [f'A{_afb_rij}', f'J{_afb_rij}']:
                         tekst = re.sub(
                             rf'(<c\b[^>]*\br="{cel}"[^>]*?)(\s*>)',
                             lambda m: (m.group(1) + ' vm="1"' + m.group(2))
@@ -521,7 +509,7 @@ def genereer():
         return jsonify({"succes": False, "fout": "Geen urendata ontvangen."}), 400
 
     try:
-        wb = maak_factuur(
+        wb, n_extra = maak_factuur(
             uren_data_lijst = uren_data_lijst,
             client_naam     = form.get("client_naam", ""),
             client_adres    = form.get("client_adres", ""),
@@ -537,7 +525,7 @@ def genereer():
         )
         buf = io.BytesIO()
         wb.save(buf)
-        buf = herstel_afbeeldingen(TEMPLATE_PATH, buf)
+        buf = herstel_afbeeldingen(TEMPLATE_PATH, buf, extra_rijen=n_extra)
 
         naam = uren_data_lijst[0].get("naam", "")
         fnr  = form.get("factuurnummer", datetime.now().strftime("%Y%m%d"))
