@@ -203,14 +203,43 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     cel.alignment = Alignment(wrap_text=True, vertical="top")
     ws.row_dimensions[13].height = max(15, len(uren_data_lijst) * 15)
 
+    EERSTE_REG     = 21   # eerste activiteitrij in de template
+    TEMPLATE_RIJEN = 15   # template heeft rijen 21–35
+    SUBTOTAAL_RIJ  = 36   # subtotaal staat in de originele template op rij 36
+
     # Wis alle regelrijen (A, G, H) zodat lege regels volledig leeg zijn
-    for r in range(21, 36):
+    for r in range(EERSTE_REG, EERSTE_REG + TEMPLATE_RIJEN):
         ws.cell(row=r, column=1, value=None)
         ws.cell(row=r, column=7, value=None)
         ws.cell(row=r, column=8, value=None)
 
+    # Tel hoeveel activiteitrijen er nodig zijn zodat we op tijd rijen kunnen invoegen
+    def _tel_rijen():
+        n = 0
+        for d in uren_data_lijst:
+            acts = d.get("activiteiten") or []
+            km_d = d["km"] if (d.get("eigen_auto", True) and eigen_auto) else 0
+            if acts:
+                n += sum(1 for a in acts if a.get("uren"))
+                if km_d: n += 1
+            else:
+                for v in [d["werk_uren"], d["reis_uren"], km_d, d["wacht_uren"]]:
+                    if v: n += 1
+        for sleutel in ["lunch", "overnachting"]:
+            if any(d[sleutel] > 0 for d in uren_data_lijst): n += 1
+        n += sum(1 for d in uren_data_lijst if d["bonnetjes"] > 0)
+        return n
+
+    n_rijen_nodig = _tel_rijen()
+    extra_rijen   = max(0, n_rijen_nodig - TEMPLATE_RIJEN)
+    if extra_rijen > 0:
+        ws.insert_rows(SUBTOTAAL_RIJ, amount=extra_rijen)
+
+    subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
+    btw_pct_rij   = subtotaal_rij + 1
+
     # Hoofdregels per urenregistratie — elke activiteit op een aparte regel
-    vrije_rij = 21
+    vrije_rij = EERSTE_REG
     for d in uren_data_lijst:
         e = datetime.strptime(d["eerste_datum"], "%Y-%m-%d")
         l = datetime.strptime(d["laatste_datum"], "%Y-%m-%d")
@@ -240,13 +269,12 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
                     tarief = 22.5
                 else:
                     continue
-                if vrije_rij <= 35:
-                    ws.cell(row=vrije_rij, column=1, value=label)
-                    cel = ws.cell(row=vrije_rij, column=7, value=act["uren"])
-                    cel.number_format = '0.00'
-                    ws.cell(row=vrije_rij, column=8, value=tarief)
-                    vrije_rij += 1
-            if km_d and vrije_rij <= 35:
+                ws.cell(row=vrije_rij, column=1, value=label)
+                cel = ws.cell(row=vrije_rij, column=7, value=act["uren"])
+                cel.number_format = '0.00'
+                ws.cell(row=vrije_rij, column=8, value=tarief)
+                vrije_rij += 1
+            if km_d:
                 ws.cell(row=vrije_rij, column=1, value=f"Vergoeding KM's - {dlabel} - {loc}")
                 ws.cell(row=vrije_rij, column=7, value=km_d)
                 ws.cell(row=vrije_rij, column=8, value=0.35)
@@ -258,7 +286,7 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
                 (f"Vergoeding KM's - {dlabel} - {loc}",     km_d,            0.35, km_d),
                 (f"WachtWerkTijd uren - {dlabel} - {loc}",  d["wacht_uren"], 22.5, d["wacht_uren"]),
             ]:
-                if check and vrije_rij <= 35:
+                if check:
                     ws.cell(row=vrije_rij, column=1, value=omschrijving)
                     ws.cell(row=vrije_rij, column=7, value=aantal)
                     ws.cell(row=vrije_rij, column=8, value=tarief)
@@ -270,7 +298,7 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         ("(Vergoeding) Overnachting", "overnachting"),
     ]:
         bedragen = [d[sleutel] for d in uren_data_lijst if d[sleutel] > 0]
-        if not bedragen or vrije_rij > 35:
+        if not bedragen:
             continue
         alle_gelijk = len(set(bedragen)) == 1
         if alle_gelijk:
@@ -286,7 +314,7 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
 
     # Bonnetjes: per urenregistratie een aparte regel (bedragen kunnen per dag verschillen)
     for d in uren_data_lijst:
-        if d["bonnetjes"] <= 0 or vrije_rij > 35:
+        if d["bonnetjes"] <= 0:
             continue
         e = datetime.strptime(d["eerste_datum"], "%Y-%m-%d")
         l = datetime.strptime(d["laatste_datum"], "%Y-%m-%d")
@@ -296,8 +324,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         ws.cell(row=vrije_rij, column=8, value=d["bonnetjes"])
         vrije_rij += 1
 
+    # Ingevoegde rijen missen de =G*H bedragformule uit de template — schrijf die expliciet
+    for r in range(EERSTE_REG + TEMPLATE_RIJEN, vrije_rij):
+        ws.cell(row=r, column=9, value=f"=G{r}*H{r}")
+
+    # Subtotaal SUM-formule over alle gebruikte activiteitrijen
+    ws.cell(row=subtotaal_rij, column=9,
+            value=f"=SUM(I{EERSTE_REG}:I{vrije_rij - 1})")
+
     # Omschrijving kolom A: tekst afbreken binnen cel bij lange activiteitnamen
-    for r in range(21, 36):
+    for r in range(EERSTE_REG, vrije_rij):
         ws.cell(row=r, column=1).alignment = Alignment(wrap_text=True, vertical="top")
 
     # BTW percentage en BTW-nummer
@@ -305,9 +341,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=5, column=17, value="")
     if not btw_verrekenen:
         ws.cell(row=5, column=8, value="")
-        ws.cell(row=37, column=9, value=0)
+        ws.cell(row=btw_pct_rij, column=9, value=0)
     else:
-        ws.cell(row=37, column=9, value=btw_pct / 100)
+        ws.cell(row=btw_pct_rij, column=9, value=btw_pct / 100)
 
     return wb
 
