@@ -207,6 +207,15 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     TEMPLATE_RIJEN = 15   # template heeft rijen 21–35
     SUBTOTAAL_RIJ  = 36   # subtotaal staat in de originele template op rij 36
 
+    # Bewaar rijhoogte en merged-cell-patronen van een template-activiteitrij
+    _rh = ws.row_dimensions[EERSTE_REG].height
+    template_rij_hoogte = _rh if _rh else (ws.sheet_format.defaultRowHeight or 15)
+    template_merges = [
+        (mr.min_col, mr.max_col)
+        for mr in list(ws.merged_cells.ranges)
+        if mr.min_row == EERSTE_REG and mr.max_row == EERSTE_REG
+    ]
+
     # Wis alle regelrijen (A, G, H) zodat lege regels volledig leeg zijn
     for r in range(EERSTE_REG, EERSTE_REG + TEMPLATE_RIJEN):
         ws.cell(row=r, column=1, value=None)
@@ -234,6 +243,12 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     extra_rijen   = max(0, n_rijen_nodig - TEMPLATE_RIJEN)
     if extra_rijen > 0:
         ws.insert_rows(SUBTOTAAL_RIJ, amount=extra_rijen)
+        # Kopieer rijhoogte en merged cells van template-rijen naar de ingevoegde rijen
+        for r in range(EERSTE_REG + TEMPLATE_RIJEN, EERSTE_REG + TEMPLATE_RIJEN + extra_rijen):
+            ws.row_dimensions[r].height = template_rij_hoogte
+            for min_col, max_col in template_merges:
+                ws.merge_cells(start_row=r, start_column=min_col,
+                                end_row=r, end_column=max_col)
 
     subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
     btw_pct_rij   = subtotaal_rij + 1
@@ -332,8 +347,8 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=subtotaal_rij, column=9,
             value=f"=SUM(I{EERSTE_REG}:I{vrije_rij - 1})")
 
-    # Omschrijving kolom A: tekst afbreken binnen cel bij lange activiteitnamen
-    for r in range(EERSTE_REG, vrije_rij):
+    # Uitlijning voor omschrijving — template-rijen hebben dit al; stel in voor extra rijen
+    for r in range(EERSTE_REG + TEMPLATE_RIJEN, vrije_rij):
         ws.cell(row=r, column=1).alignment = Alignment(wrap_text=True, vertical="top")
 
     # BTW percentage en BTW-nummer
