@@ -216,9 +216,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         (mr.min_col, mr.max_col)
         for mr in list(ws.merged_cells.ranges)
         if mr.min_row == EERSTE_REG and mr.max_row == EERSTE_REG
+        and mr.max_col < 7  # alleen omschrijvings-merge (A:F), nooit G/H/I
     ]
     template_stijlen = {}
-    for col in range(1, 19):
+    for col in range(1, 7):  # alleen kolommen A t/m F (omschrijving), niet G/H/I data-kolommen
         src = ws.cell(row=EERSTE_REG, column=col)
         if src.has_style:
             template_stijlen[col] = {
@@ -318,6 +319,8 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
 
     subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
     btw_pct_rij   = subtotaal_rij + 1
+    btw_euro_rij  = subtotaal_rij + 2
+    totaal_rij    = subtotaal_rij + 3
 
     # ── Pass 2: schrijf rijen naar het werkblad ──
     vrije_rij = EERSTE_REG
@@ -346,10 +349,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     else:
         ws.cell(row=btw_pct_rij, column=9, value=btw_pct / 100)
 
-    return wb, extra_rijen
+    # BTW-bedrag en totaal expliciet schrijven zodat ze altijd naar de juiste rijen verwijzen
+    ws.cell(row=btw_euro_rij, column=9,
+            value=f"=I{subtotaal_rij}*I{btw_pct_rij}")
+    ws.cell(row=totaal_rij, column=9,
+            value=f"=I{subtotaal_rij}+I{btw_euro_rij}")
+
+    return wb, subtotaal_rij
 
 
-def herstel_afbeeldingen(template_path, output_buf, extra_rijen=0):
+def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
     """
     openpyxl strips <drawing>, printerSettings en vm="1" (image-in-cell).
     Deze functie patcht de openpyxl-output zodat alle afbeeldingen behouden blijven.
@@ -400,8 +409,8 @@ def herstel_afbeeldingen(template_path, output_buf, extra_rijen=0):
                     tekst = data.decode('utf-8')
 
                     # 1. Voeg vm="1" terug toe aan de afbeelding-in-cel rijen
-                    # (verschuift mee met het aantal ingevoegde activiteitrijen)
-                    _afb_rij = 47 + extra_rijen
+                    # Blauwe balk: 4 rijen onder TOTAAL (TOTAAL = subtotaal_rij + 3)
+                    _afb_rij = subtotaal_rij + 7
                     for cel in [f'A{_afb_rij}', f'J{_afb_rij}']:
                         tekst = re.sub(
                             rf'(<c\b[^>]*\br="{cel}"[^>]*?)(\s*>)',
@@ -509,7 +518,7 @@ def genereer():
         return jsonify({"succes": False, "fout": "Geen urendata ontvangen."}), 400
 
     try:
-        wb, n_extra = maak_factuur(
+        wb, sub_rij = maak_factuur(
             uren_data_lijst = uren_data_lijst,
             client_naam     = form.get("client_naam", ""),
             client_adres    = form.get("client_adres", ""),
@@ -525,7 +534,7 @@ def genereer():
         )
         buf = io.BytesIO()
         wb.save(buf)
-        buf = herstel_afbeeldingen(TEMPLATE_PATH, buf, extra_rijen=n_extra)
+        buf = herstel_afbeeldingen(TEMPLATE_PATH, buf, subtotaal_rij=sub_rij)
 
         naam = uren_data_lijst[0].get("naam", "")
         fnr  = form.get("factuurnummer", datetime.now().strftime("%Y%m%d"))
