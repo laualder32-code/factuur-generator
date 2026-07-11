@@ -296,6 +296,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         ws.cell(row=vrije_rij, column=8, value=d["bonnetjes"])
         vrije_rij += 1
 
+    # Omschrijving kolom A: tekst afbreken binnen cel bij lange activiteitnamen
+    for r in range(21, 36):
+        ws.cell(row=r, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+
     # BTW percentage en BTW-nummer
     # Q5 altijd leegmaken: template-formule geeft anders 0
     ws.cell(row=5, column=17, value="")
