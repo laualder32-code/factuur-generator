@@ -214,14 +214,15 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     _rh = ws.row_dimensions[EERSTE_REG].height
     template_rij_hoogte = _rh if _rh else (ws.sheet_format.defaultRowHeight or 15)
     template_stijlen = {}
-    for col in range(1, 7):  # alleen kolommen A t/m F (omschrijving), niet G/H/I data-kolommen
+    for col in range(1, 10):  # A t/m I — G/H/I meenemen voor randen en opmaak
         src = ws.cell(row=EERSTE_REG, column=col)
         if src.has_style:
             template_stijlen[col] = {
-                "border":    copy(src.border),
-                "fill":      copy(src.fill),
-                "font":      copy(src.font),
-                "alignment": copy(src.alignment),
+                "border":        copy(src.border),
+                "fill":          copy(src.fill),
+                "font":          copy(src.font),
+                "alignment":     copy(src.alignment),
+                "number_format": src.number_format,
             }
 
     # Wis alle regelrijen (A, G, H) zodat lege regels volledig leeg zijn
@@ -312,10 +313,11 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
             ws.row_dimensions[r].height = template_rij_hoogte
             for col, stijl in template_stijlen.items():
                 tgt = ws.cell(row=r, column=col)
-                tgt.border    = copy(stijl["border"])
-                tgt.fill      = copy(stijl["fill"])
-                tgt.font      = copy(stijl["font"])
-                tgt.alignment = copy(stijl["alignment"])
+                tgt.border        = copy(stijl["border"])
+                tgt.fill          = copy(stijl["fill"])
+                tgt.font          = copy(stijl["font"])
+                tgt.alignment     = copy(stijl["alignment"])
+                tgt.number_format = stijl["number_format"]
 
     subtotaal_rij = SUBTOTAAL_RIJ + extra_rijen
     btw_pct_rij   = subtotaal_rij + 1
@@ -326,15 +328,20 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     vrije_rij = EERSTE_REG
     for rij in rijen:
         ws.cell(row=vrije_rij, column=1, value=rij["omschrijving"])
-        cel = ws.cell(row=vrije_rij, column=7, value=rij["aantal"])
-        if rij["is_uren"]:
-            cel.number_format = '0.00'
-        ws.cell(row=vrije_rij, column=8, value=rij["tarief"])
+        ws.cell(row=vrije_rij, column=7, value=rij["aantal"]).number_format = '0.00'
+        ws.cell(row=vrije_rij, column=8, value=rij["tarief"]).number_format = '0.00'
         vrije_rij += 1
 
     # Ingevoegde rijen missen de =G*H bedragformule uit de template — schrijf die expliciet
     for r in range(EERSTE_REG + TEMPLATE_RIJEN, vrije_rij):
-        ws.cell(row=r, column=9, value=f"=G{r}*H{r}")
+        c = ws.cell(row=r, column=9, value=f"=ROUND(G{r}*H{r},2)")
+        c.number_format = '0.00'
+
+    # Zet 2 decimalen op alle activiteitrijen (ook template-rijen 21-35)
+    for r in range(EERSTE_REG, vrije_rij):
+        ws.cell(row=r, column=7).number_format = '0.00'
+        ws.cell(row=r, column=8).number_format = '0.00'
+        ws.cell(row=r, column=9).number_format = '0.00'
 
     # Subtotaal SUM-formule over alle gebruikte activiteitrijen
     ws.cell(row=subtotaal_rij, column=9,
