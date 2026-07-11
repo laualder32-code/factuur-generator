@@ -193,8 +193,9 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     # Kolommen C en L breed genoeg voor lange datums ("10 augustus 2026")
     ws.column_dimensions["C"].width = 18
     ws.column_dimensions["L"].width = 18
-    # Kolommen G en I smaller zodat het factuur op twee pagina's past bij afdrukken
+    # Kolommen G/H/I smaller zodat het factuur op twee pagina's past bij afdrukken
     ws.column_dimensions["G"].width = 7
+    ws.column_dimensions["H"].width = 11
     ws.column_dimensions["I"].width = 11
     ws.column_dimensions["R"].width = 11
 
@@ -212,12 +213,6 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     # Bewaar rijhoogte, merged-cell-patronen en celopmaak van een template-activiteitrij
     _rh = ws.row_dimensions[EERSTE_REG].height
     template_rij_hoogte = _rh if _rh else (ws.sheet_format.defaultRowHeight or 15)
-    template_merges = [
-        (mr.min_col, mr.max_col)
-        for mr in list(ws.merged_cells.ranges)
-        if mr.min_row == EERSTE_REG and mr.max_row == EERSTE_REG
-        and mr.max_col < 7  # alleen omschrijvings-merge (A:F), nooit G/H/I
-    ]
     template_stijlen = {}
     for col in range(1, 7):  # alleen kolommen A t/m F (omschrijving), niet G/H/I data-kolommen
         src = ws.cell(row=EERSTE_REG, column=col)
@@ -305,11 +300,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     extra_rijen = max(0, len(rijen) - TEMPLATE_RIJEN)
     if extra_rijen > 0:
         ws.insert_rows(SUBTOTAAL_RIJ, amount=extra_rijen)
+
+        # openpyxl laat "ghost merges" achter op de originele template-rij-posities
+        # (bv. SUBTOTAAL rijen 36-39 en blauwe-balk rijen 47-48 hadden brede A:I merges).
+        # Verwijder alle merged-cell-ranges die in het ingevoegde bereik vallen.
+        for mr in list(ws.merged_cells.ranges):
+            if SUBTOTAAL_RIJ <= mr.min_row < SUBTOTAAL_RIJ + extra_rijen:
+                ws.merged_cells.remove(mr)
+
         for r in range(EERSTE_REG + TEMPLATE_RIJEN, EERSTE_REG + TEMPLATE_RIJEN + extra_rijen):
             ws.row_dimensions[r].height = template_rij_hoogte
-            for min_col, max_col in template_merges:
-                ws.merge_cells(start_row=r, start_column=min_col,
-                                end_row=r, end_column=max_col)
             for col, stijl in template_stijlen.items():
                 tgt = ws.cell(row=r, column=col)
                 tgt.border    = copy(stijl["border"])
