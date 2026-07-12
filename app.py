@@ -425,9 +425,12 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                     tekst = data.decode('utf-8')
 
                     # 1. Voeg vm="1" terug toe aan de afbeelding-in-cel rijen
-                    # Blauwe balk: 4 rijen onder TOTAAL (TOTAAL = subtotaal_rij + 3)
-                    _afb_rij = subtotaal_rij + 7
-                    for cel in [f'A{_afb_rij}', f'J{_afb_rij}']:
+                    # De template heeft de blauwe balk op rij 47 (en 48).
+                    # Na insert_rows(36, extra_rijen) verschuiven die naar 47+extra en 48+extra.
+                    # subtotaal_rij = 36 + extra_rijen  =>  47 + extra_rijen = subtotaal_rij + 11
+                    _afb_rij = subtotaal_rij + 11
+                    for cel in [f'A{_afb_rij}',     f'J{_afb_rij}',
+                                f'A{_afb_rij + 1}', f'J{_afb_rij + 1}']:
                         tekst = re.sub(
                             rf'(<c\b[^>]*\br="{cel}"[^>]*?)(\s*>)',
                             lambda m: (m.group(1) + ' vm="1"' + m.group(2))
