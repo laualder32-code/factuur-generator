@@ -205,6 +205,22 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     cel.alignment = Alignment(wrap_text=True, vertical="top")
     ws.row_dimensions[13].height = max(15, len(uren_data_lijst) * 15)
 
+    # Locatie — unieke locaties uit de uren-data, zelfde stijl als "Periode:" label
+    locaties = list(dict.fromkeys(d["locatie"] for d in uren_data_lijst if d.get("locatie")))
+    locatie_tekst = " / ".join(locaties)
+    periode_label_cel = ws.cell(row=12, column=8)  # "Periode:" — kopieer hiervan de opmaak
+    for mr in list(ws.merged_cells.ranges):         # verwijder eventuele conflicterende merges
+        if mr.min_row in (14, 15) and mr.max_row in (14, 15) and mr.min_col <= 9 and mr.max_col >= 8:
+            ws.merged_cells.remove(mr)
+    ws.merge_cells(start_row=14, start_column=8, end_row=14, end_column=9)
+    lbl = ws.cell(row=14, column=8, value="Locatie:")
+    lbl.font      = copy(periode_label_cel.font)
+    lbl.fill      = copy(periode_label_cel.fill)
+    lbl.alignment = copy(periode_label_cel.alignment)
+    lbl.border    = copy(periode_label_cel.border)
+    ws.merge_cells(start_row=15, start_column=8, end_row=15, end_column=9)
+    ws.cell(row=15, column=8, value=locatie_tekst)
+
     EERSTE_REG     = 21   # eerste activiteitrij in de template
     TEMPLATE_RIJEN = 15   # template heeft rijen 21–35
     SUBTOTAAL_RIJ  = 36   # subtotaal staat in de originele template op rij 36
