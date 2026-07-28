@@ -492,9 +492,10 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                                     rf'(<row\b[^>]*\br="{vaste_rij}"[^>]*>)(.*?)(</row>)',
                                     tekst, re.DOTALL)
                                 if rij_m:
+                                    # Achteraan toevoegen zodat kolomvolgorde (A voor J) bewaard blijft
                                     tekst = tekst.replace(
                                         rij_m.group(0),
-                                        rij_m.group(1) + cel_xml + rij_m.group(2) + rij_m.group(3))
+                                        rij_m.group(1) + rij_m.group(2) + cel_xml + rij_m.group(3))
                                 else:
                                     # Rij ontbreekt volledig — voeg rij-element in
                                     volgende = re.search(
