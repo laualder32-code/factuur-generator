@@ -496,6 +496,10 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                 if naam == 'xl/worksheets/sheet1.xml':
                     tekst = data.decode('utf-8')
 
+                    # Verwijder DISPIMG-formulecellen (openpyxl behoudt de formule maar
+                    # verwijdert vm="1" → Excel evalueert → #WAARDE!)
+                    tekst = re.sub(r'<c\b[^>]*>.*?_xlpm\.DISPIMG.*?</c>', '', tekst, flags=re.DOTALL)
+
                     # Verwijder eventuele <drawing> die openpyxl heeft toegevoegd (we gebruiken footer)
                     tekst = re.sub(r'<drawing\b[^/]*/>', '', tekst)
 
