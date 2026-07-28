@@ -402,6 +402,12 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         cel = ws.cell(row=kor_rij, column=7, value="BTW vrijgesteld")
         cel.font = Font(bold=True)
 
+    # Schaal altijd naar 1 pagina breed × 1 pagina hoog zodat de blauwe balk
+    # altijd op de laatste pagina valt (ook als de header iets hoger is geworden).
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth  = 1
+    ws.page_setup.fitToHeight = 1
+
     return wb, subtotaal_rij
 
 
