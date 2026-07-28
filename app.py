@@ -495,24 +495,54 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
 
                 if naam == 'xl/worksheets/sheet1.xml':
                     tekst = data.decode('utf-8')
+                    tmpl_sheet = tmpl_zip.read('xl/worksheets/sheet1.xml').decode('utf-8')
 
-                    # Verwijder image-in-cel resten in kolommen A en J rondom de blauwe balk.
-                    # openpyxl slaat de DISPIMG-cel op als gecachede foutwaarde (#VALUE!)
-                    # zonder vm="1" → Excel toont #WAARDE!. Verwijder op positie.
+                    # Stap 1: Verwijder DISPIMG-resten op de (verschoven) templatepositie.
+                    # openpyxl kopieert de cellen zonder vm="1" → #WAARDE!
                     for _rij in range(subtotaal_rij + 9, subtotaal_rij + 16):
                         for _col in ('A', 'J'):
                             _ref = f'{_col}{_rij}'
                             tekst = re.sub(rf'<c\b[^>]*\br="{_ref}"[^>]*/>', '', tekst)
                             tekst = re.sub(rf'<c\b[^>]*\br="{_ref}"[^>]*>.*?</c>', '', tekst, flags=re.DOTALL)
 
-                    # Verwijder eventuele <drawing> die openpyxl heeft toegevoegd
-                    tekst = re.sub(r'<drawing\b[^/]*/>', '', tekst)
+                    # Stap 2: Injecteer vm="1" cellen op vaste rijen 47-48 vanuit template.
+                    # Kolomvolgorde A → J zodat Excel geen herstel nodig heeft.
+                    for vaste_rij in [47, 48]:
+                        for col in ['A', 'J']:
+                            vaste_cel = f'{col}{vaste_rij}'
+                            tmpl_m = re.search(
+                                rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>',
+                                tmpl_sheet, re.DOTALL)
+                            if not tmpl_m:
+                                continue
+                            cel_xml = tmpl_m.group(0)
+                            if 'vm=' not in cel_xml:
+                                cel_xml = re.sub(r'(<c\b[^>]*?)(\s*>)', r'\1 vm="1"\2', cel_xml, count=1)
+                            # Verwijder bestaande cel op die positie (openpyxl-versie zonder vm="1")
+                            tekst = re.sub(rf'<c\b[^>]*\br="{vaste_cel}"[^>]*/>', '', tekst)
+                            tekst = re.sub(rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>', '', tekst, flags=re.DOTALL)
+                            # Voeg cel in de juiste rij (achteraan = kolomvolgorde bewaard)
+                            rij_m = re.search(
+                                rf'(<row\b[^>]*\br="{vaste_rij}"[^>]*>)(.*?)(</row>)',
+                                tekst, re.DOTALL)
+                            if rij_m:
+                                tekst = tekst.replace(
+                                    rij_m.group(0),
+                                    rij_m.group(1) + rij_m.group(2) + cel_xml + rij_m.group(3))
+                            else:
+                                volgende = re.search(rf'<row\b[^>]*\br="{vaste_rij + 1}"[^>]*>', tekst)
+                                nieuw_rij = f'<row r="{vaste_rij}">{cel_xml}</row>'
+                                if volgende:
+                                    tekst = tekst[:volgende.start()] + nieuw_rij + tekst[volgende.start():]
+                                else:
+                                    tekst = tekst.replace('</sheetData>', nieuw_rij + '</sheetData>')
 
-                    # Verwijder eventuele bestaande headerFooter zodat we er maar één hebben
+                    # Stap 3: Verwijder eventuele <drawing> van openpyxl + bestaande headerFooter
+                    tekst = re.sub(r'<drawing\b[^/]*/>', '', tekst)
                     tekst = re.sub(r'<headerFooter\b.*?</headerFooter>', '', tekst, flags=re.DOTALL)
 
+                    # Stap 4: Voeg toe in OOXML-volgorde: headerFooter → drawing → legacyDrawingHF
                     r_ns = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
-                    # OOXML-volgorde: headerFooter → drawing → legacyDrawingHF
                     invoegsel = (
                         '<headerFooter alignWithMargins="0">'
                         '<oddFooter>&amp;C&amp;G</oddFooter>'
