@@ -405,10 +405,45 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     return wb, subtotaal_rij
 
 
+_VML_FOOTER = b'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<xml xmlns:v="urn:schemas-microsoft-com:vml"
+     xmlns:o="urn:schemas-microsoft-com:office:office"
+     xmlns:x="urn:schemas-microsoft-com:office:excel">
+ <o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="1"/></o:shapelayout>
+ <v:shapetype id="_x0000_t75" coordsize="21600,21600" o:spt="75" o:preferrelative="t"
+   path="m@4@5l@4@11@9@11@9@5xe" filled="f" stroked="f">
+  <v:stroke joinstyle="miter"/>
+  <v:formulas>
+   <v:f eqn="if lineDrawn pixelLineWidth 0"/><v:f eqn="sum @0 1 0"/>
+   <v:f eqn="sum 0 0 @1"/><v:f eqn="prod @2 1 2"/>
+   <v:f eqn="prod @3 21600 pixelWidth"/><v:f eqn="prod @3 21600 pixelHeight"/>
+   <v:f eqn="sum @0 0 1"/><v:f eqn="prod @6 1 2"/>
+   <v:f eqn="prod @7 21600 pixelWidth"/><v:f eqn="sum @8 21600 0"/>
+   <v:f eqn="prod @7 21600 pixelHeight"/><v:f eqn="sum @10 21600 0"/>
+  </v:formulas>
+  <v:path o:extrusionok="f" gradientshapeok="t" o:connecttype="rect"/>
+  <o:lock v:ext="edit" aspectratio="t"/>
+ </v:shapetype>
+ <v:shape id="CF" o:spid="_x0000_s1025" type="#_x0000_t75"
+   style="position:absolute;margin-left:0;margin-top:0;width:495pt;height:30pt;z-index:1">
+  <v:imagedata r:id="rId1" o:title="bluebar"/>
+  <o:lock v:ext="edit" rotation="t"/>
+ </v:shape>
+</xml>'''
+
+_VML_FOOTER_RELS = b'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1"
+   Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+   Target="../media/image1.png"/>
+</Relationships>'''
+
+
 def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
     """
-    openpyxl strips <drawing>, printerSettings en vm="1" (image-in-cell).
-    Deze functie patcht de openpyxl-output zodat alle afbeeldingen behouden blijven.
+    openpyxl strips <drawing> en printerSettings.
+    Voegt de blauwe balk toe als paginavoettekst zodat hij altijd onderaan elke
+    afgedrukte/PDF-pagina staat.
     """
     import re
 
@@ -436,6 +471,12 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
         'xl/media/image1.png',
     }
 
+    # Bestanden die we zelf aanmaken — niet overnemen uit template of openpyxl
+    zelf_schrijven = {
+        'xl/drawings/vmlDrawing1.vml',
+        'xl/drawings/_rels/vmlDrawing1.vml.rels',
+    }
+
     with zipfile.ZipFile(output_buf, 'r') as out_zip, \
          zipfile.ZipFile(template_path, 'r') as tmpl_zip, \
          zipfile.ZipFile(nieuwe_buf, 'w', zipfile.ZIP_DEFLATED) as nieuw_zip:
@@ -455,72 +496,21 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                 if naam == 'xl/worksheets/sheet1.xml':
                     tekst = data.decode('utf-8')
 
-                    # 1. Blauwe balk altijd op vaste rijen 47-48 zetten.
-                    # Na insert_rows(36, n) staan de DISPIMG-cellen op 47+n en 48+n.
-                    # Strategie: haal de cellen uit de TEMPLATE (rij 47-48), zet ze op
-                    # de vaste positie in de output, verwijder ze van de verschoven positie.
-                    extra_rijen_n = subtotaal_rij - 36  # = extra_rijen
-                    tmpl_sheet_xml = tmpl_zip.read('xl/worksheets/sheet1.xml').decode('utf-8')
-                    for vaste_rij in [47, 48]:
-                        verschoven_rij = vaste_rij + extra_rijen_n
-                        for col in ['A', 'J']:
-                            vaste_cel     = f'{col}{vaste_rij}'
-                            verschoven_cel = f'{col}{verschoven_rij}'
+                    # Verwijder eventuele <drawing> die openpyxl heeft toegevoegd (we gebruiken footer)
+                    tekst = re.sub(r'<drawing\b[^/]*/>', '', tekst)
 
-                            # Haal de cel-XML op uit de template
-                            tmpl_m = re.search(
-                                rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>',
-                                tmpl_sheet_xml, re.DOTALL)
-                            if not tmpl_m:
-                                continue
-                            cel_xml = tmpl_m.group(0)
-                            if 'vm=' not in cel_xml:
-                                cel_xml = re.sub(r'(<c\b[^>]*?)(\s*>)',
-                                                 r'\1 vm="1"\2', cel_xml, count=1)
+                    # Verwijder eventuele bestaande headerFooter zodat we er maar één hebben
+                    tekst = re.sub(r'<headerFooter\b.*?</headerFooter>', '', tekst, flags=re.DOTALL)
 
-                            # Verwijder DISPIMG van de verschoven positie (voorkomt #WAARDE!)
-                            if verschoven_rij != vaste_rij:
-                                tekst = re.sub(
-                                    rf'<c\b[^>]*\br="{verschoven_cel}"[^>]*>.*?</c>',
-                                    '', tekst, flags=re.DOTALL)
-
-                            # Zet de cel op de vaste positie
-                            bestaand = re.search(
-                                rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>'
-                                rf'|<c\b[^>]*\br="{vaste_cel}"[^>]*/\s*>',
-                                tekst, re.DOTALL)
-                            if bestaand:
-                                tekst = tekst.replace(bestaand.group(0), cel_xml)
-                            else:
-                                # Geen bestaande cel — voeg in aan het einde van de rij
-                                rij_m = re.search(
-                                    rf'(<row\b[^>]*\br="{vaste_rij}"[^>]*>)(.*?)(</row>)',
-                                    tekst, re.DOTALL)
-                                if rij_m:
-                                    # Achteraan toevoegen zodat kolomvolgorde (A voor J) bewaard blijft
-                                    tekst = tekst.replace(
-                                        rij_m.group(0),
-                                        rij_m.group(1) + rij_m.group(2) + cel_xml + rij_m.group(3))
-                                else:
-                                    # Rij ontbreekt volledig — voeg rij-element in
-                                    volgende = re.search(
-                                        rf'<row\b[^>]*\br="{vaste_rij + 1}"[^>]*>', tekst)
-                                    nieuw = f'<row r="{vaste_rij}">{cel_xml}</row>'
-                                    if volgende:
-                                        tekst = (tekst[:volgende.start()]
-                                                 + nieuw + tekst[volgende.start():])
-                                    else:
-                                        tekst = tekst.replace('</sheetData>',
-                                                              nieuw + '</sheetData>')
-
-                    # 2. Drawing element vervangen/toevoegen met rId2
-                    # (template-rels: rId2 = drawing1.xml, rId1 = printerSettings)
-                    # openpyxl kan al een <drawing r:id="rId1"/> bevatten met zijn eigen rId — verwijder dat
-                    tekst = re.sub(r'<drawing\b.*?/>', '', tekst)
-                    tekst = tekst.replace(
-                        '</worksheet>',
-                        '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId2"/></worksheet>'
+                    # Voeg footer toe (blauwe balk) + legacyDrawingHF (VML-referentie)
+                    r_ns = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+                    invoegsel = (
+                        '<headerFooter alignWithMargins="0">'
+                        '<oddFooter>&amp;C&amp;G</oddFooter>'
+                        '</headerFooter>'
+                        f'<legacyDrawingHF {r_ns} r:id="rId_vmlHF"/>'
                     )
+                    tekst = tekst.replace('</worksheet>', invoegsel + '</worksheet>')
 
                     data = tekst.encode('utf-8')
 
@@ -552,8 +542,25 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
 
                 nieuw_zip.writestr(naam, data)
 
-            else:
+            elif naam == 'xl/worksheets/_rels/sheet1.xml.rels':
+                # Template-rels overnemen én VML-voettekstrelatie toevoegen
+                tekst = tmpl_zip.read(naam).decode('utf-8')
+                if 'rId_vmlHF' not in tekst:
+                    tekst = tekst.replace(
+                        '</Relationships>',
+                        '<Relationship Id="rId_vmlHF"'
+                        ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"'
+                        ' Target="../drawings/vmlDrawing1.vml"/>'
+                        '</Relationships>'
+                    )
+                nieuw_zip.writestr(naam, tekst.encode('utf-8'))
+
+            elif naam not in zelf_schrijven:
                 nieuw_zip.writestr(naam, tmpl_zip.read(naam))
+
+        # VML-voettekstbestanden voor de blauwe balk
+        nieuw_zip.writestr('xl/drawings/vmlDrawing1.vml', _VML_FOOTER)
+        nieuw_zip.writestr('xl/drawings/_rels/vmlDrawing1.vml.rels', _VML_FOOTER_RELS)
 
         # [Content_Types].xml: gebruik template-versie (bevat al alle richData-types)
         # maar voeg eventuele extra openpyxl-types toe die er nog niet in zitten
@@ -564,11 +571,17 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
             partname = re.search(r'PartName="([^"]+)"', override)
             if partname and partname.group(1) not in tmpl_ct:
                 tmpl_ct = tmpl_ct.replace('</Types>', override + '</Types>')
+        # VML content type
+        vml_ct = '<Override PartName="/xl/drawings/vmlDrawing1.vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>'
+        if 'vmlDrawing1.vml' not in tmpl_ct:
+            tmpl_ct = tmpl_ct.replace('</Types>', vml_ct + '</Types>')
         nieuw_zip.writestr('[Content_Types].xml', tmpl_ct)
 
         # Voeg openpyxl-bestanden toe die niet in het template zitten
         for naam in out_zip.namelist():
-            if naam not in tmpl_namen and naam not in uit_output and naam not in altijd_template and naam != '[Content_Types].xml':
+            if (naam not in tmpl_namen and naam not in uit_output
+                    and naam not in altijd_template and naam not in zelf_schrijven
+                    and naam != '[Content_Types].xml'):
                 nieuw_zip.writestr(naam, out_zip.read(naam))
 
     nieuwe_buf.seek(0)
