@@ -512,13 +512,12 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                     tekst = re.sub(r'<headerFooter\b.*?</headerFooter>', '', tekst, flags=re.DOTALL)
 
                     r_ns = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+                    # OOXML-volgorde: headerFooter → drawing → legacyDrawingHF
                     invoegsel = (
-                        # Tekening voor zichtbaarheid in bladweergave (dynamische positie via drawing1.xml)
-                        f'<drawing {r_ns} r:id="rId2"/>'
-                        # Footer voor consistente onderkant bij afdrukken / PDF
                         '<headerFooter alignWithMargins="0">'
                         '<oddFooter>&amp;C&amp;G</oddFooter>'
                         '</headerFooter>'
+                        f'<drawing {r_ns} r:id="rId2"/>'
                         f'<legacyDrawingHF {r_ns} r:id="rId_vmlHF"/>'
                     )
                     tekst = tekst.replace('</worksheet>', invoegsel + '</worksheet>')
