@@ -450,19 +450,62 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                 if naam == 'xl/worksheets/sheet1.xml':
                     tekst = data.decode('utf-8')
 
-                    # 1. Voeg vm="1" terug toe aan de afbeelding-in-cel rijen
-                    # De template heeft de blauwe balk op rij 47 (en 48).
-                    # Na insert_rows(36, extra_rijen) verschuiven die naar 47+extra en 48+extra.
-                    # subtotaal_rij = 36 + extra_rijen  =>  47 + extra_rijen = subtotaal_rij + 11
-                    _afb_rij = subtotaal_rij + 11
-                    for cel in [f'A{_afb_rij}',     f'J{_afb_rij}',
-                                f'A{_afb_rij + 1}', f'J{_afb_rij + 1}']:
-                        tekst = re.sub(
-                            rf'(<c\b[^>]*\br="{cel}"[^>]*?)(\s*>)',
-                            lambda m: (m.group(1) + ' vm="1"' + m.group(2))
-                                      if 'vm=' not in m.group(0) else m.group(0),
-                            tekst
-                        )
+                    # 1. Blauwe balk altijd op vaste rijen 47-48 zetten.
+                    # Na insert_rows(36, n) staan de DISPIMG-cellen op 47+n en 48+n.
+                    # Strategie: haal de cellen uit de TEMPLATE (rij 47-48), zet ze op
+                    # de vaste positie in de output, verwijder ze van de verschoven positie.
+                    extra_rijen_n = subtotaal_rij - 36  # = extra_rijen
+                    tmpl_sheet_xml = tmpl_zip.read('xl/worksheets/sheet1.xml').decode('utf-8')
+                    for vaste_rij in [47, 48]:
+                        verschoven_rij = vaste_rij + extra_rijen_n
+                        for col in ['A', 'J']:
+                            vaste_cel     = f'{col}{vaste_rij}'
+                            verschoven_cel = f'{col}{verschoven_rij}'
+
+                            # Haal de cel-XML op uit de template
+                            tmpl_m = re.search(
+                                rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>',
+                                tmpl_sheet_xml, re.DOTALL)
+                            if not tmpl_m:
+                                continue
+                            cel_xml = tmpl_m.group(0)
+                            if 'vm=' not in cel_xml:
+                                cel_xml = re.sub(r'(<c\b[^>]*?)(\s*>)',
+                                                 r'\1 vm="1"\2', cel_xml, count=1)
+
+                            # Verwijder DISPIMG van de verschoven positie (voorkomt #WAARDE!)
+                            if verschoven_rij != vaste_rij:
+                                tekst = re.sub(
+                                    rf'<c\b[^>]*\br="{verschoven_cel}"[^>]*>.*?</c>',
+                                    '', tekst, flags=re.DOTALL)
+
+                            # Zet de cel op de vaste positie
+                            bestaand = re.search(
+                                rf'<c\b[^>]*\br="{vaste_cel}"[^>]*>.*?</c>'
+                                rf'|<c\b[^>]*\br="{vaste_cel}"[^>]*/\s*>',
+                                tekst, re.DOTALL)
+                            if bestaand:
+                                tekst = tekst.replace(bestaand.group(0), cel_xml)
+                            else:
+                                # Geen bestaande cel — voeg in aan het einde van de rij
+                                rij_m = re.search(
+                                    rf'(<row\b[^>]*\br="{vaste_rij}"[^>]*>)(.*?)(</row>)',
+                                    tekst, re.DOTALL)
+                                if rij_m:
+                                    tekst = tekst.replace(
+                                        rij_m.group(0),
+                                        rij_m.group(1) + cel_xml + rij_m.group(2) + rij_m.group(3))
+                                else:
+                                    # Rij ontbreekt volledig — voeg rij-element in
+                                    volgende = re.search(
+                                        rf'<row\b[^>]*\br="{vaste_rij + 1}"[^>]*>', tekst)
+                                    nieuw = f'<row r="{vaste_rij}">{cel_xml}</row>'
+                                    if volgende:
+                                        tekst = (tekst[:volgende.start()]
+                                                 + nieuw + tekst[volgende.start():])
+                                    else:
+                                        tekst = tekst.replace('</sheetData>',
+                                                              nieuw + '</sheetData>')
 
                     # 2. Drawing element vervangen/toevoegen met rId2
                     # (template-rels: rId2 = drawing1.xml, rId1 = printerSettings)
