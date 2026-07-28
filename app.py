@@ -505,15 +505,17 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                             tekst = re.sub(rf'<c\b[^>]*\br="{_ref}"[^>]*/>', '', tekst)
                             tekst = re.sub(rf'<c\b[^>]*\br="{_ref}"[^>]*>.*?</c>', '', tekst, flags=re.DOTALL)
 
-                    # Verwijder eventuele <drawing> die openpyxl heeft toegevoegd (we gebruiken footer)
+                    # Verwijder eventuele <drawing> die openpyxl heeft toegevoegd
                     tekst = re.sub(r'<drawing\b[^/]*/>', '', tekst)
 
                     # Verwijder eventuele bestaande headerFooter zodat we er maar één hebben
                     tekst = re.sub(r'<headerFooter\b.*?</headerFooter>', '', tekst, flags=re.DOTALL)
 
-                    # Voeg footer toe (blauwe balk) + legacyDrawingHF (VML-referentie)
                     r_ns = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
                     invoegsel = (
+                        # Tekening voor zichtbaarheid in bladweergave (dynamische positie via drawing1.xml)
+                        f'<drawing {r_ns} r:id="rId2"/>'
+                        # Footer voor consistente onderkant bij afdrukken / PDF
                         '<headerFooter alignWithMargins="0">'
                         '<oddFooter>&amp;C&amp;G</oddFooter>'
                         '</headerFooter>'
@@ -550,6 +552,24 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                     data = tekst.encode('utf-8')
 
                 nieuw_zip.writestr(naam, data)
+
+            elif naam == 'xl/drawings/drawing1.xml':
+                # Pas de rijanckers in de tekening aan: template heeft de balk op rijen 47-48
+                # (0-geïndexeerd: 46 en 47). Na insert_rows verschuiven we mee.
+                tekst = tmpl_zip.read(naam).decode('utf-8')
+                extra_rijen_n = subtotaal_rij - 36
+                from_row_0 = 46 + extra_rijen_n
+                to_row_0   = 47 + extra_rijen_n
+                teller = [0]
+                def _vervang_rij(m):
+                    teller[0] += 1
+                    if teller[0] == 1:
+                        return f'<xdr:row>{from_row_0}</xdr:row>'
+                    if teller[0] == 2:
+                        return f'<xdr:row>{to_row_0}</xdr:row>'
+                    return m.group(0)
+                tekst = re.sub(r'<xdr:row>\d+</xdr:row>', _vervang_rij, tekst)
+                nieuw_zip.writestr(naam, tekst.encode('utf-8'))
 
             elif naam == 'xl/worksheets/_rels/sheet1.xml.rels':
                 # Template-rels overnemen én VML-voettekstrelatie toevoegen
