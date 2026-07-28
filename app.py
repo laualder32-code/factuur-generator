@@ -553,21 +553,17 @@ def herstel_afbeeldingen(template_path, output_buf, subtotaal_rij=36):
                 nieuw_zip.writestr(naam, data)
 
             elif naam == 'xl/drawings/drawing1.xml':
-                # Pas de rijanckers in de tekening aan: template heeft de balk op rijen 47-48
-                # (0-geïndexeerd: 46 en 47). Na insert_rows verschuiven we mee.
+                # Verschuif ALLEEN de blauwe-balk-ankers (template: 0-indexed rijen 46 en 47).
+                # Het logo heeft andere rijwaarden en blijft onaangeroerd.
                 tekst = tmpl_zip.read(naam).decode('utf-8')
                 extra_rijen_n = subtotaal_rij - 36
-                from_row_0 = 46 + extra_rijen_n
-                to_row_0   = 47 + extra_rijen_n
-                teller = [0]
-                def _vervang_rij(m):
-                    teller[0] += 1
-                    if teller[0] == 1:
-                        return f'<xdr:row>{from_row_0}</xdr:row>'
-                    if teller[0] == 2:
-                        return f'<xdr:row>{to_row_0}</xdr:row>'
-                    return m.group(0)
-                tekst = re.sub(r'<xdr:row>\d+</xdr:row>', _vervang_rij, tekst)
+                if extra_rijen_n > 0:
+                    tekst = tekst.replace(
+                        '<xdr:row>46</xdr:row>',
+                        f'<xdr:row>{46 + extra_rijen_n}</xdr:row>')
+                    tekst = tekst.replace(
+                        '<xdr:row>47</xdr:row>',
+                        f'<xdr:row>{47 + extra_rijen_n}</xdr:row>')
                 nieuw_zip.writestr(naam, tekst.encode('utf-8'))
 
             elif naam == 'xl/worksheets/_rels/sheet1.xml.rels':
