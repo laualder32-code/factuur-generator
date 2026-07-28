@@ -199,11 +199,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.column_dimensions["I"].width = 11
     ws.column_dimensions["R"].width = 11
 
-    # Periode — één regel per urenregistratie
-    periodes = "\n".join(periode_str(d) for d in uren_data_lijst)
+    # Periode — twee datums per regel, gescheiden door ", "
+    periode_lijst = [periode_str(d) for d in uren_data_lijst]
+    periodes = "\n".join(
+        ", ".join(periode_lijst[i:i + 2])
+        for i in range(0, len(periode_lijst), 2)
+    )
     cel = ws.cell(row=13, column=8, value=periodes)
     cel.alignment = Alignment(wrap_text=True, vertical="top")
-    ws.row_dimensions[13].height = max(15, len(uren_data_lijst) * 15)
+    aantal_regels = (len(periode_lijst) + 1) // 2  # naar boven afronden
+    ws.row_dimensions[13].height = max(15, aantal_regels * 15)
 
     # Locatie — unieke locaties uit de uren-data, zelfde stijl als "Periode:" label
     locaties = list(dict.fromkeys(d["locatie"] for d in uren_data_lijst if d.get("locatie")))
