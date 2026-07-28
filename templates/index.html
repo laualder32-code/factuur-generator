@@ -395,6 +395,10 @@
             <option value="9">9%</option>
           </select>
         </div>
+        <label class="check-row" for="kor-check" style="margin-top:8px;">
+          <input type="checkbox" id="kor-check" checked />
+          <span class="check-label">KOR vermelden</span>
+        </label>
       </div>
     </div>
     <div class="grid-2">
@@ -617,6 +621,7 @@
       btw_verrekenen:  document.getElementById("btw-check").checked,
       btw_pct:         document.getElementById("btw-check").checked
                          ? parseFloat(document.getElementById("btw-pct").value) : 0,
+      kor_vermelden:   document.getElementById("kor-check").checked,
       eigen_auto:      true,
       factuurdatum:    document.getElementById("factuurdatum").value,
       vervaldatum:     document.getElementById("vervaldatum").value,

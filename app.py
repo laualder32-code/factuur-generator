@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_file
 import io
 import zipfile
 import openpyxl
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font
 from copy import copy
 import os
 from datetime import datetime, timedelta, date, time
@@ -146,7 +146,7 @@ def lees_urenregistratie(bestand_bytes):
 
 def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
                  client_email, client_kvk, factuurnummer, btw_pct, eigen_auto, btw_verrekenen=True,
-                 factuurdatum=None, vervaldatum=None):
+                 factuurdatum=None, vervaldatum=None, kor_vermelden=True):
 
     # Aggregeer alle urenregistraties
     totalen = {
@@ -387,6 +387,16 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     ws.cell(row=totaal_rij, column=9,
             value=f"=I{subtotaal_rij}+I{btw_euro_rij}")
 
+    # KOR — "BTW vrijgesteld" vet onder de TOTAAL-rij
+    if kor_vermelden:
+        kor_rij = totaal_rij + 1
+        for mr in list(ws.merged_cells.ranges):
+            if mr.min_row == kor_rij and mr.max_row == kor_rij and mr.min_col <= 8 and mr.max_col >= 7:
+                ws.merged_cells.remove(mr)
+        ws.merge_cells(start_row=kor_rij, start_column=7, end_row=kor_rij, end_column=8)
+        cel = ws.cell(row=kor_rij, column=7, value="BTW vrijgesteld")
+        cel.font = Font(bold=True)
+
     return wb, subtotaal_rij
 
 
@@ -566,6 +576,7 @@ def genereer():
             btw_verrekenen  = bool(form.get("btw_verrekenen", True)),
             factuurdatum    = form.get("factuurdatum"),
             vervaldatum     = form.get("vervaldatum"),
+            kor_vermelden   = form.get("kor_vermelden", True) is not False,
         )
         buf = io.BytesIO()
         wb.save(buf)
