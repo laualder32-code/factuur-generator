@@ -558,7 +558,8 @@
       lunch:        a.lunch        + d.lunch,
       bonnetjes:    a.bonnetjes    + d.bonnetjes,
       overnachting: a.overnachting + d.overnachting,
-    }), {werk_uren:0,reis_uren:0,wacht_uren:0,km:0,lunch:0,bonnetjes:0,overnachting:0});
+      diner:        a.diner        + (d.diner || 0),
+    }), {werk_uren:0,reis_uren:0,wacht_uren:0,km:0,lunch:0,bonnetjes:0,overnachting:0,diner:0});
 
     const eerste = alleUrenData[0];
     document.getElementById("info-naam").textContent    = eerste.naam    || "–";
@@ -574,10 +575,11 @@
     if (t.lunch > 0)        extra.push(`<div class="info-item"><strong>Lunch:</strong> €${t.lunch.toFixed(2)}</div>`);
     if (t.bonnetjes > 0)    extra.push(`<div class="info-item"><strong>Bonnetjes:</strong> €${t.bonnetjes.toFixed(2)}</div>`);
     if (t.overnachting > 0) extra.push(`<div class="info-item"><strong>Overnachting:</strong> €${t.overnachting.toFixed(2)}</div>`);
+    if (t.diner > 0)        extra.push(`<div class="info-item"><strong>Diner:</strong> €${t.diner.toFixed(2)}</div>`);
     document.getElementById("extra-kosten-info").innerHTML = extra.join("");
 
     const totaalBedrag = t.werk_uren * 45 + t.reis_uren * 22.5 + t.wacht_uren * 22.5
-                        + t.km * 0.35 + t.lunch + t.bonnetjes + t.overnachting;
+                        + t.km * 0.35 + t.lunch + t.bonnetjes + t.overnachting + t.diner;
     document.getElementById("stat-totaal").textContent =
       "€ " + totaalBedrag.toFixed(2).replace(".", ",");
   }
