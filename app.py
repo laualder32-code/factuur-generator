@@ -105,13 +105,14 @@ def lees_urenregistratie(bestand_bytes):
 
     # Lees extra kosten op basis van het label in kolom T (20), niet op vaste rij
     # zodat oude én nieuwe uren-registratiebestanden allebei werken
-    lunch = bonnetjes = overnachting = 0.0
+    lunch = bonnetjes = overnachting = diner = 0.0
     for _r in range(16, 23):
         _label = str(ws.cell(row=_r, column=20).value or "").lower()
         _val   = float(ws.cell(row=_r, column=22).value or 0)
-        if "lunch"        in _label: lunch        = _val
-        elif "bonnetjes"  in _label: bonnetjes    = _val
+        if "lunch"          in _label: lunch        = _val
+        elif "bonnetjes"    in _label: bonnetjes    = _val
         elif "overnachting" in _label: overnachting = _val
+        elif "diner"        in _label: diner        = _val
 
     # Detecteer of dit bestand met eigen auto gereden is (geen "Auto van:" notitie)
     eigen_auto = True
@@ -140,6 +141,7 @@ def lees_urenregistratie(bestand_bytes):
         "lunch":         lunch,
         "bonnetjes":     bonnetjes,
         "overnachting":  overnachting,
+        "diner":         diner,
         "activiteiten":  activiteiten,
     }
 
@@ -156,9 +158,10 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
         "reis_uren":  round(sum(d["reis_uren"]  for d in uren_data_lijst), 2),
         "wacht_uren": round(sum(d["wacht_uren"] for d in uren_data_lijst), 2),
         "km":         round(sum(d["km"]         for d in uren_data_lijst), 2),
-        "lunch":      sum(d["lunch"]        for d in uren_data_lijst),
-        "bonnetjes":  sum(d["bonnetjes"]    for d in uren_data_lijst),
+        "lunch":        sum(d["lunch"]        for d in uren_data_lijst),
+        "bonnetjes":    sum(d["bonnetjes"]    for d in uren_data_lijst),
         "overnachting": sum(d["overnachting"] for d in uren_data_lijst),
+        "diner":        sum(d["diner"]        for d in uren_data_lijst),
     }
 
     wb = openpyxl.load_workbook(TEMPLATE_PATH)
@@ -299,6 +302,7 @@ def maak_factuur(uren_data_lijst, client_naam, client_adres, client_postcode,
     for label, sleutel in [
         ("(Vergoeding) Lunch",        "lunch"),
         ("(Vergoeding) Overnachting", "overnachting"),
+        ("(Vergoeding) Diner",        "diner"),
     ]:
         bedragen = [d[sleutel] for d in uren_data_lijst if d[sleutel] > 0]
         if not bedragen:
