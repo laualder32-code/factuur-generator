@@ -708,9 +708,11 @@ def genereer():
         wb.save(buf)
         buf = herstel_afbeeldingen(TEMPLATE_PATH, buf, subtotaal_rij=sub_rij)
 
-        naam = uren_data_lijst[0].get("naam", "")
-        fnr  = form.get("factuurnummer", datetime.now().strftime("%Y%m%d"))
-        bestandsnaam = f"{fnr} - Factuur {naam}.xlsx".strip()
+        naam    = uren_data_lijst[0].get("naam", "")
+        locatie = uren_data_lijst[0].get("locatie", "")
+        fnr     = form.get("factuurnummer", datetime.now().strftime("%Y%m%d"))
+        loc_deel = f" {locatie}".rstrip() if locatie else ""
+        bestandsnaam = f"{fnr} - Factuur {naam}{loc_deel}.xlsx".strip()
 
         return send_file(
             buf,
