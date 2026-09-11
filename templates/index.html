@@ -381,7 +381,7 @@
     <div class="grid-2" style="margin-bottom:14px;">
       <div>
         <label>Factuurnummer</label>
-        <input type="text" id="factuurnummer" />
+        <input type="text" id="factuurnummer" oninput="syncDatumVanFnr()" />
       </div>
       <div>
         <label style="margin-bottom:8px;">BTW</label>
@@ -443,6 +443,18 @@
   function datumNL(isoStr) {
     const d = new Date(isoStr + "T00:00:00");
     return `${d.getDate()} ${MAANDEN[d.getMonth()]} ${d.getFullYear()}`;
+  }
+
+  function syncDatumVanFnr() {
+    const fnr = document.getElementById("factuurnummer").value.replace(/\D/g, "");
+    if (fnr.length >= 8) {
+      const y = fnr.slice(0, 4), m = fnr.slice(4, 6), d = fnr.slice(6, 8);
+      const iso = `${y}-${m}-${d}`;
+      if (!isNaN(new Date(iso).getTime())) {
+        document.getElementById("factuurdatum").value = iso;
+        updateVervaldatum();
+      }
+    }
   }
 
   function updateVervaldatum() {
